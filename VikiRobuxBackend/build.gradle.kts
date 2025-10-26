@@ -13,7 +13,18 @@ version = "0.0.1"
 application {
     mainClass = "io.ktor.server.netty.EngineMain"
 }
+tasks.register<Jar>("fatJarCustom") {
+    group = "build"
+    archiveFileName.set("app-all.jar")
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 
+    manifest {
+        attributes["Main-Class"] = "com.faigenbloom.ApplicationKt"
+    }
+
+    from(configurations.runtimeClasspath.get().map { if (it.isDirectory) it else zipTree(it) })
+    with(tasks.named("jar").get() as CopySpec)
+}
 repositories {
     mavenCentral()
 }

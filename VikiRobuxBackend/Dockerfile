@@ -5,7 +5,7 @@ WORKDIR /app
 COPY . .
 
 # Сборка fat jar (нужен shadowJar)
-RUN gradle shadowJar --no-daemon
+RUN gradle fatJarCustom --no-daemon
 
 # --- Runtime Stage ---
 FROM eclipse-temurin:17-jre

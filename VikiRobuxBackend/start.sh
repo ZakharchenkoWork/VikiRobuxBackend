@@ -5,7 +5,6 @@ set -e
 cd VikiRobuxBackend
 
 # собираем "fat jar" (всё в одном файле)
-./gradlew fatJarCustom --no-daemon
-
+./gradlew fatJarCustom --no-daemon || ./gradlew build --no-daemon
 # запускаем сервер
 java -jar build/libs/*-all.jar

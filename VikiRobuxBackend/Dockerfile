@@ -1,13 +1,18 @@
-# ---- build stage ----
-FROM gradle:8.7-jdk17 AS build
+# Базовый образ с JDK
+FROM gradle:8.4-jdk17 AS build
+
 WORKDIR /app
 COPY . .
-RUN gradle buildFatJar --no-daemon
 
-# ---- runtime stage ----
+# Сборка fat jar (нужен shadowJar)
+RUN gradle shadowJar --no-daemon
+
+# --- Runtime Stage ---
 FROM eclipse-temurin:17-jre
 WORKDIR /app
-COPY --from=build /app/build/libs/*-all.jar app.jar
 
-EXPOSE 8080
-CMD ["java", "-jar", "app.jar"]
+COPY --from=build /app/build/libs/*.jar app.jar
+
+# Запускаем сервер
+ENTRYPOINT ["java", "-jar", "app.jar"]
+

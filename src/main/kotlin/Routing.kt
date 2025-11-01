@@ -28,5 +28,10 @@ fun Application.configureRouting() {
                 call.respondText("❌ Элемент не найден")
             }
         }
+
+        get("/clearAll") {
+            itemRepository.clear()
+                call.respond(itemRepository.getAll())
+        }
     }
 }

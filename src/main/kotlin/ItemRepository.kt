@@ -65,4 +65,8 @@ class ItemRepository(private val file: File = File("items.json")) {
             .toInstant()
             .toEpochMilli()
     }
+
+    fun clear() {
+        file.writeText("")
+    }
 }

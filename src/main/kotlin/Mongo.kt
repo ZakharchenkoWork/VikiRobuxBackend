@@ -23,7 +23,7 @@ class Mongo {
 
     init {
         val connectionString =
-            "mongodb+srv://kostiantynzakharchenko:44RYPTSMX9og05O4@famillybudget.4ihd47u.mongodb.net/?retryWrites=true&w=majority&appName=FamillyBudget"
+            "mongodb+srv://baskinaerobins:lGMil0GKkaDgqzkX@cluster0.grenyrd.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
 
         val serverApi = ServerApi.builder()
             .version(ServerApiVersion.V1)

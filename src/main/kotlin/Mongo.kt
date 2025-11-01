@@ -62,4 +62,7 @@ class Mongo {
             update = Updates.set("isDone", isDone)
         )
     }
+    suspend fun clearAll() {
+        collection.deleteMany(Filters.empty())
+    }
 }

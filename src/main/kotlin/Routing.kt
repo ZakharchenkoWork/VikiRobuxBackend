@@ -24,5 +24,10 @@ fun Application.configureRouting() {
             itemRepository.markAsDone(id, state)
             call.respond(itemRepository.getAll())
         }
+        get("/clearAll") {
+            itemRepository.clearAll()
+            call.respond("All gone")
+        }
+
     }
 }

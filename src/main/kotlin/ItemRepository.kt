@@ -42,4 +42,8 @@ class ItemRepository {
             .toInstant()
             .toEpochMilli()
     }
+
+    suspend fun clearAll() {
+        mongo.clearAll()
+    }
 }

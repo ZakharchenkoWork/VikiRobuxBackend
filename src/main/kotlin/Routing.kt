@@ -23,7 +23,7 @@ fun Application.configureRouting() {
             val state = call.parameters["state"]?.toBooleanStrictOrNull() ?: false
             val updated = itemRepository.markAsDone(id, state)
             if (updated != null) {
-                call.respond(updated)
+                call.respond(itemRepository.getAll())
             } else {
                 call.respondText("❌ Элемент не найден")
             }

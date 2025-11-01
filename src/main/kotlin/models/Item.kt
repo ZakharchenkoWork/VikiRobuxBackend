@@ -3,7 +3,10 @@ package com.faigenbloom.models
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class ItemWrapper(val items: List<Item>)
+data class ItemWrapper(
+    val items: List<Item>,
+    val lastUpdateDate: Long?,
+)
 
 @Serializable
 data class Item(

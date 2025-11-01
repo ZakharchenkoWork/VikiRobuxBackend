@@ -11,50 +11,27 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.UUID
 
-class ItemRepository(private val file: File = File("items.json")) {
-    private val json = Json { prettyPrint = true }
-    private val items: MutableList<Item> = mutableListOf()
-    private var lastUpdateDate: Long? = null
+class ItemRepository {
+    val mongo = Mongo()
 
-    init {
-        if (file.exists()) {
-            runCatching {
-                val text = file.readText()
-                if (text.isNotBlank()) {
-                    items.addAll(json.decodeFromString(text))
-                }
-            }.onFailure { println("⚠️ Не удалось загрузить items.json: $it") }
-        }
+    suspend fun getAll(): ItemWrapper {
+        val items = mongo.getItems()
+
+        val lastUpdateDate = items
+            .maxOfOrNull { parseDateToMillis(it.date) }
+
+        return ItemWrapper(
+            items = items.sortedByDescending { parseDateToMillis(it.date) },
+            lastUpdateDate = lastUpdateDate
+        )
     }
 
-    fun getAll(): ItemWrapper = ItemWrapper(
-        items.sortedByDescending { it.date },
-        lastUpdateDate = lastUpdateDate,
-    )
-
-    fun add(item: Item) {
-        items.add(item)
-        lastUpdateDate = parseDateToMillis(item.date)
-        save()
+    suspend fun add(item: Item) {
+        mongo.addItem(item)
     }
 
-    fun markAsDone(id: String, isDone: Boolean = true): Item? {
-        val index = items.indexOfFirst { it.id == id }
-        if (index != -1) {
-            val updated = items[index].copy(isDone = isDone)
-            items[index] = updated
-            save()
-            return updated
-        }
-        return null
-    }
-
-
-    private fun save() {
-        file.writeText(json.encodeToString(ItemWrapper(
-            items.sortedByDescending { it.date },
-            lastUpdateDate = lastUpdateDate,
-        )))
+    suspend fun markAsDone(id: String, isDone: Boolean = true){
+        mongo.markAsDone(id, isDone)
     }
 
     private fun parseDateToMillis(dateString: String): Long {
@@ -64,9 +41,5 @@ class ItemRepository(private val file: File = File("items.json")) {
             .atZone(ZoneId.systemDefault())
             .toInstant()
             .toEpochMilli()
-    }
-
-    fun clear() {
-        file.writeText("")
     }
 }

@@ -21,17 +21,8 @@ fun Application.configureRouting() {
         get("/markDone/{id}/{state}") {
             val id = call.parameters["id"] ?: return@get call.respondText("❌ id отсутствует")
             val state = call.parameters["state"]?.toBooleanStrictOrNull() ?: false
-            val updated = itemRepository.markAsDone(id, state)
-            if (updated != null) {
-                call.respond(itemRepository.getAll())
-            } else {
-                call.respondText("❌ Элемент не найден")
-            }
-        }
-
-        get("/clearAll") {
-            itemRepository.clear()
-                call.respond(itemRepository.getAll())
+            itemRepository.markAsDone(id, state)
+            call.respond(itemRepository.getAll())
         }
     }
 }

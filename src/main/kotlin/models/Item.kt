@@ -15,5 +15,9 @@ data class Item(
     val description: String,
     val quantity: Int,
     val isDone: Boolean,
-)
+) {
+    companion object {
+        const val COLLECTION_NAME = "items"
+    }
+}
 

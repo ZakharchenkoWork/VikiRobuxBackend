@@ -1,0 +1,137 @@
+package com.faigenbloom.spartaculous.routing
+
+import com.faigenbloom.spartaculous.food.*
+import io.ktor.http.*
+import io.ktor.server.application.*
+import io.ktor.server.request.*
+import io.ktor.server.response.*
+import io.ktor.server.routing.*
+import io.ktor.server.util.*
+ import kotlinx.serialization.SerializationException
+ import kotlinx.serialization.decodeFromString
+ import kotlinx.serialization.json.Json
+
+fun Route.foodRoutes(foodRepo: FoodRepository) {
+    route("/api/food") {
+        suspend fun uidOr401(call: ApplicationCall): String? {
+            val uid = call.request.headers["X-User-Id"]?.trim()
+            if (uid.isNullOrBlank()) {
+                call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Missing X-User-Id header"))
+                return null
+            }
+            return uid
+        }
+
+        // For tests: wipe everything for user
+        delete {
+            val uid = uidOr401(call) ?: return@delete
+            foodRepo.clearUser(uid)
+            call.respond(HttpStatusCode.NoContent)
+        }
+
+        route("/meals") {
+            get {
+                val uid = uidOr401(call) ?: return@get
+                call.respond(HttpStatusCode.OK, foodRepo.listMeals(uid))
+            }
+
+            post {
+                val uid = uidOr401(call) ?: return@post
+                val ct = call.request.headers["Content-Type"]
+                val raw = try { call.receiveText() } catch (_: Throwable) { "<unavailable>" }
+                val req = try {
+                    Json { ignoreUnknownKeys = true; isLenient = true }
+                        .decodeFromString<CreateMealRequest>(raw)
+                } catch (e: SerializationException) {
+                    call.application.environment.log.error("POST /api/food/meals deserialization failed, CT=${ct}, raw='${raw}'", e)
+                    call.respond(HttpStatusCode.BadRequest, mapOf("message" to (e.message ?: "Invalid request body")))
+                    return@post
+                }
+
+                val name = req.name.trim()
+                if (name.isBlank()) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid name"))
+                    return@post
+                }
+                if (req.grams <= 0) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid grams"))
+                    return@post
+                }
+                if (req.calories < 0) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid calories"))
+                    return@post
+                }
+
+                val created = foodRepo.addMeal(uid, req)
+                call.respond(HttpStatusCode.Created, created)
+            }
+
+            route("/{mealId}") {
+                put {
+                    val uid = uidOr401(call) ?: return@put
+                    val mealId = call.parameters.getOrFail("mealId")
+                    val req = call.receive<UpdateMealRequest>()
+                    val updated = foodRepo.updateMeal(uid, mealId, req)
+                    call.respond(HttpStatusCode.OK, updated)
+                }
+
+                delete {
+                    val uid = uidOr401(call) ?: return@delete
+                    val mealId = call.parameters.getOrFail("mealId")
+                    foodRepo.deleteMeal(uid, mealId)
+                    call.respond(HttpStatusCode.NoContent)
+                }
+
+                route("/ingredients") {
+                    get {
+                        val uid = uidOr401(call) ?: return@get
+                        val mealId = call.parameters.getOrFail("mealId")
+                        call.respond(HttpStatusCode.OK, foodRepo.listIngredients(uid, mealId))
+                    }
+
+                    post {
+                        val uid = uidOr401(call) ?: return@post
+                        val mealId = call.parameters.getOrFail("mealId")
+                        val req = call.receive<CreateIngredientRequest>()
+
+                        val name = req.name.trim()
+                        if (name.isBlank()) {
+                            call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid name"))
+                            return@post
+                        }
+                        if (req.grams <= 0) {
+                            call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid grams"))
+                            return@post
+                        }
+                        if (req.calories < 0) {
+                            call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid calories"))
+                            return@post
+                        }
+
+                        val created = foodRepo.addIngredient(uid, mealId, req)
+                        call.respond(HttpStatusCode.Created, created)
+                    }
+
+                    route("/{ingredientId}") {
+                        put {
+                            val uid = uidOr401(call) ?: return@put
+                            val mealId = call.parameters.getOrFail("mealId")
+                            val ingredientId = call.parameters.getOrFail("ingredientId")
+                            val req = call.receive<UpdateIngredientRequest>()
+                            val updated = foodRepo.updateIngredient(uid, mealId, ingredientId, req)
+                            call.respond(HttpStatusCode.OK, updated)
+                        }
+
+                        delete {
+                            val uid = uidOr401(call) ?: return@delete
+                            val mealId = call.parameters.getOrFail("mealId")
+                            val ingredientId = call.parameters.getOrFail("ingredientId")
+                            foodRepo.deleteIngredient(uid, mealId, ingredientId)
+                            call.respond(HttpStatusCode.NoContent)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,40 @@
+﻿> Task :clean
+> Task :checkKotlinGradlePluginConfigurationErrors
+
+> Task :compileKotlin
+w: Argument -Xopt-in is deprecated. Please use -opt-in instead
+./gradlew : e: file:///F:/Programming/VikiRobuxBackend/spotacleus-rest/src/main/kotlin/com/faigenbloom/spartaculous/bod
+yfat/BodyFatMongo.kt:23:17 'public' function exposes its 'internal' return type BodyFatEntryDocument
+строка:1 знак:1
++ ./gradlew clean compileKotlin --console=plain 2>&1 | Out-File -FilePa ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (e: file:///F:/P...atEntryDocument:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+e: file:///F:/Programming/VikiRobuxBackend/spotacleus-rest/src/main/kotlin/com/faigenbloom/spartaculous/bodyfat/BodyFat
+Mongo.kt:23:24 'public' function exposes its 'internal' parameter type BodyFatEntryDocument
+e: file:///F:/Programming/VikiRobuxBackend/spotacleus-rest/src/main/kotlin/com/faigenbloom/spartaculous/bodyfat/BodyFat
+Mongo.kt:28:17 'public' function exposes its 'internal' return type argument BodyFatEntryDocument
+e: file:///F:/Programming/VikiRobuxBackend/spotacleus-rest/src/main/kotlin/com/faigenbloom/spartaculous/goals/MongoGoal
+sRepository.kt:17:1 Class 'MongoGoalsRepository' is not abstract and does not implement abstract member public abstract
+ fun updateBodyFatGoal(userId: String, target: String, dateEpochMillis: Long?): Unit defined in com.faigenbloom.spartac
+ulous.goals.GoalsRepository
+
+> Task :compileKotlin FAILED
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':compileKotlin'.
+> A failure occurred while executing org.jetbrains.kotlin.compilerRunner.GradleCompilerRunnerWithWorkers$GradleKotlinCo
+mpilerWorkAction
+   > Compilation error. See log for more details
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 7s
+3 actionable tasks: 3 executed

@@ -1,0 +1,397 @@
+package com.faigenbloom.spartaculous.nutrition
+
+import kotlinx.serialization.Serializable
+
+/**
+ * Self-contained parser for OCR text of nutrition labels.
+ * Provides a local DTO (restored after migration) and a single entry point parseNutritionScan().
+ * Designed to be resilient to EN/RU labels and minor OCR noise.
+ */
+object NutritionScanParser {
+
+    @Serializable
+    data class NutritionScanDto(
+        val calories: Int? = null,
+        val proteinG: Double? = null,
+        val carbsG: Double? = null,
+        val fatG: Double? = null,
+        val sugarG: Double? = null,
+        val fiberG: Double? = null,
+        val sodiumMg: Int? = null
+    )
+
+    /**
+     * Parse raw OCR text into structured nutrition facts.
+     */
+    fun parseNutritionScan(ocrText: String): NutritionScanDto {
+        val text = ocrText.lowercase()
+        return NutritionScanDto(
+            calories = findFirstInt(text, CALORIES_REGEXES),
+            proteinG = findFirstDouble(text, PROTEIN_REGEXES),
+            carbsG = findFirstDouble(text, CARBS_REGEXES),
+            fatG = findFirstDouble(text, FAT_REGEXES),
+            sugarG = findFirstDouble(text, SUGAR_REGEXES),
+            fiberG = findFirstDouble(text, FIBER_REGEXES),
+            sodiumMg = findFirstInt(text, SODIUM_REGEXES)
+        )
+    }
+
+    // Helpers
+    private fun findFirstInt(text: String, patterns: List<Regex>): Int? =
+        patterns.asSequence()
+            .mapNotNull { rx -> rx.find(text)?.groupValues?.getOrNull(1) }
+            .map { it.replace(",", ".") }
+            .mapNotNull { it.toDoubleOrNull() }
+            .map { it.toInt() }
+            .firstOrNull()
+
+    private fun findFirstDouble(text: String, patterns: List<Regex>): Double? =
+        patterns.asSequence()
+            .mapNotNull { rx -> rx.find(text)?.groupValues?.getOrNull(1) }
+            .map { it.replace(",", ".") }
+            .mapNotNull { it.toDoubleOrNull() }
+            .firstOrNull()
+
+    // Regex patterns targeting common EN/RU label variants and OCR quirks
+    private val NUM = "(\\d+(?:[.,]\\d+)?)"
+    private val INT = "(\\d{1,4})"
+
+    private val CALORIES_REGEXES = listOf(
+        // calories / kcal / ккал / энергетическая ценность
+        Regex("""(?:(?:calories?)|(?:energy)|(?:энерг(?:етич[а-я]*))|(?:ккал)|(?:kcal))[\n\r\t :]*$INT""", RegexOption.IGNORE_CASE),
+        Regex("""$INT\s*(?:ккал|kcal)""", RegexOption.IGNORE_CASE)
+    )
+
+    private val PROTEIN_REGEXES = listOf(
+        Regex("""(?:(?:protein)|(?:бел(?:ок|ки)?))\s*[:]?\s*$NUM\s*(?:g|г)""", RegexOption.IGNORE_CASE)
+    )
+
+    private val CARBS_REGEXES = listOf(
+        Regex("""(?:(?:carbohydrates?)|(?:carbs?)|(?:углевод[а-я]*))\s*[:]?\s*$NUM\s*(?:g|г)""", RegexOption.IGNORE_CASE)
+    )
+
+    private val FAT_REGEXES = listOf(
+        Regex("""(?:(?:fat)|(?:жир[а-я]*))\s*[:]?\s*$NUM\s*(?:g|г)""", RegexOption.IGNORE_CASE)
+    )
+
+    private val SUGAR_REGEXES = listOf(
+        Regex("""(?:(?:sugars?)|(?:sugar)|(?:сахар[а-я]*))\s*[:]?\s*$NUM\s*(?:g|г)""", RegexOption.IGNORE_CASE)
+    )
+
+    private val FIBER_REGEXES = listOf(
+        Regex("""(?:(?:fiber)|(?:клетчатка)|(?:пищ[её]вые\s+волокна))\s*[:]?\s*$NUM\s*(?:g|г)""", RegexOption.IGNORE_CASE)
+    )
+
+    private val SODIUM_REGEXES = listOf(
+        Regex("""(?:(?:sodium)|(?:натрий|натрия))\s*[:]?\s*(\\d{1,5})\s*(?:mg|мг)""", RegexOption.IGNORE_CASE)
+    )
+}
+package com.faigenbloom.spartaculous.nutrition
+
+
+
+data class ParsedNutrition(
+    val calories: Int? = null,
+    val proteins: Float? = null,
+    val fats: Float? = null,
+    val carbs: Float? = null,
+    val sugar: Float? = null,
+    val sodium: Int? = null,
+    val potassium: Int? = null,
+    val calcium: Int? = null,
+    val magnesium: Int? = null,
+    val iron: Int? = null
+)
+
+fun parseNutritionScan(result: NutritionScanResponseDto?): ParsedNutrition? {
+    if (result == null) return null
+    val facts = result.facts
+
+    val text = result.text
+    val lines = text.lowercase()
+        .split('\n', '\r')
+        .map { it.trim() }
+        .filter { it.isNotBlank() }
+
+    val kcalMatches = findKcalValues(lines, text)
+    var calories = kcalMatches.preferred?.toInt()
+        ?: pickInt(collectValues(lines, caloriesKeywords + caloriesUnits, caloriesUnits))
+        ?: pickInt(collectValues(lines, caloriesUnits, caloriesUnits))
+        ?: pickInt(collectValues(lines, caloriesKeywords, emptyList()))
+    var proteins = pickFloat(collectValues(lines, proteinKeywords, gramUnits))
+        ?: pickFloat(collectValues(lines, proteinKeywords, emptyList()))
+    var fats = pickFloat(collectValues(lines, fatKeywords, gramUnits))
+        ?: pickFloat(collectValues(lines, fatKeywords, emptyList()))
+    var carbs = pickFloat(collectValues(lines, carbKeywords, gramUnits))
+        ?: pickFloat(collectValues(lines, carbKeywords, emptyList()))
+    var sugar = pickFloat(collectValues(lines, sugarKeywords, gramUnits))
+        ?: pickFloat(collectValues(lines, sugarKeywords, emptyList()))
+    val sodium = parseSodium(lines)
+    val potassium = pickInt(collectValues(lines, potassiumKeywords, mgUnits))
+        ?: pickInt(collectValues(lines, potassiumKeywords, emptyList()))
+    val calcium = pickInt(collectValues(lines, calciumKeywords, mgUnits))
+        ?: pickInt(collectValues(lines, calciumKeywords, emptyList()))
+    val magnesium = pickInt(collectValues(lines, magnesiumKeywords, mgUnits))
+        ?: pickInt(collectValues(lines, magnesiumKeywords, emptyList()))
+    val iron = pickInt(collectValues(lines, ironKeywords, mgUnits))
+        ?: pickInt(collectValues(lines, ironKeywords, emptyList()))
+
+    val bju = findBjuTriple(text.lowercase())
+    if (bju != null) {
+        if (proteins == null) proteins = bju.first
+        if (fats == null) fats = bju.second
+        if (carbs == null) carbs = bju.third
+    }
+
+    val symbolBju = findMacroSymbols(text.lowercase())
+    if (symbolBju != null) {
+        if (proteins == null) proteins = symbolBju.first
+        if (fats == null) fats = symbolBju.second
+        if (carbs == null) carbs = symbolBju.third
+    }
+
+    val any = listOf(
+        calories, proteins, fats, carbs, sugar,
+        sodium, potassium, calcium, magnesium, iron
+    ).any { it != null }
+    if (!any) return null
+
+    if (carbs != null  sugar != null  calories != null) {
+        if (proteins == null) proteins = 0f
+        if (fats == null) fats = 0f
+    }
+
+    return ParsedNutrition(
+        calories = facts?.calories ?: calories,
+        proteins = facts?.proteinG?.toFloat() ?: proteins,
+        fats = facts?.fatG?.toFloat() ?: fats,
+        carbs = facts?.carbsG?.toFloat() ?: carbs,
+        sugar = facts?.sugarG?.toFloat() ?: sugar,
+        sodium = facts?.sodiumMg?.toInt() ?: sodium,
+        potassium = potassium,
+        calcium = calcium,
+        magnesium = magnesium,
+        iron = iron
+    )
+}
+
+private val numberRegex = Regex("""\d+(?:[.,]\d+)?""")
+private val gramUnits = listOf("g", "гр", "г", "g/")
+private val caloriesUnits = listOf("kcal", "ккал", "кал")
+private val mgUnits = listOf("mg", "мг")
+private val proteinKeywords = listOf("protein", "proteins", "proteine", "белк", "білк", "білки", "белки")
+private val fatKeywords = listOf("fat", "fats", "grasimi", "grăsimi", "жир", "жири", "жирі")
+private val carbKeywords = listOf("carb", "carbs", "carbo", "glucide", "углев", "вуглев", "угл", "вугл")
+private val sugarKeywords = listOf("sugar", "sugars", "zahar", "zaharuri", "сахар", "сахара", "цукор")
+private val caloriesKeywords = listOf("calorie", "calories", "energy", "energetic", "valoare", "энерг", "калор", "ккал")
+private val bjuKeywords = listOf("бжу", "б/ж/у", "bju", "b/j/u")
+private val sodiumKeywords = listOf("sodium", "натрий", "натрій")
+private val saltKeywords = listOf("salt", "соль", "сіль", "sare")
+private val potassiumKeywords = listOf("potassium", "калий", "kaliu")
+private val calciumKeywords = listOf("calcium", "calciu", "кальций")
+private val magnesiumKeywords = listOf("magnesium", "магний")
+private val ironKeywords = listOf("iron", "fier", "железо")
+
+private fun collectValues(
+    lines: List<String>,
+    keywords: List<String>,
+    units: List<String>,
+    lookahead: Int = 2
+): List<Float> {
+    val values = mutableListOf<Float>()
+    lines.forEachIndexed { index, line ->
+        if (keywords.any { line.contains(it) }) {
+            values += extractNumbers(line, units)
+            if (values.isEmpty() && lookahead > 0) {
+                for (i in 1..lookahead) {
+                    val next = lines.getOrNull(index + i) ?: break
+                    values += extractNumbers(next, units)
+                }
+            }
+        }
+    }
+    return values
+}
+
+private fun extractNumbers(line: String, units: List<String>): List<Float> {
+    if (units.isNotEmpty() && units.none { line.contains(it) }) {
+        // allow numbers even without units if line is short
+        if (line.length > 32) return emptyList()
+    }
+    return numberRegex.findAll(line).mapNotNull { match ->
+        if (isPercentValue(line, match.range)) return@mapNotNull null
+        match.value.replace(',', '.').toFloatOrNull()
+    }.toList()
+}
+
+private fun isPercentValue(line: String, range: IntRange): Boolean {
+    val after = line.substring(range.last + 1).trimStart()
+    if (after.startsWith("%")) return true
+    val before = line.substring(0, range.first).trimEnd()
+    return before.endsWith("%")
+}
+
+private fun pickFloat(values: List<Float>): Float? {
+    val cleaned = values.filter { it.isFinite() }
+    if (cleaned.isEmpty()) return null
+    val positive = cleaned.filter { it > 0.1f }
+    return if (positive.isNotEmpty()) positive.minOrNull() else 0f
+}
+
+private fun pickInt(values: List<Float>): Int? {
+    return pickFloat(values)?.toInt()
+}
+
+private fun findFloat(lines: List<String>, keywords: List<String>, units: List<String>): Float? {
+    for (line in lines) {
+        if (!keywords.any { line.contains(it) }) continue
+        if (!units.any { line.contains(it) }) continue
+        val match = numberRegex.find(line) ?: continue
+        return match.value.replace(',', '.').toFloatOrNull()
+    }
+    return null
+}
+
+private fun findFloatLoose(lines: List<String>, keywords: List<String>): Float? {
+    for (line in lines) {
+        if (!keywords.any { line.contains(it) }) continue
+        val match = numberRegex.find(line) ?: continue
+        return match.value.replace(',', '.').toFloatOrNull()
+    }
+    return null
+}
+
+private fun findInt(lines: List<String>, keywords: List<String>, units: List<String>): Int? {
+    for (line in lines) {
+        if (!keywords.any { line.contains(it) }) continue
+        if (!units.any { line.contains(it) }) continue
+        val match = numberRegex.find(line) ?: continue
+        val value = match.value.replace(',', '.').toFloatOrNull() ?: continue
+        return value.toInt()
+    }
+    return null
+}
+
+private fun findIntLoose(lines: List<String>, keywords: List<String>): Int? {
+    for (line in lines) {
+        if (!keywords.any { line.contains(it) }) continue
+        val match = numberRegex.find(line) ?: continue
+        val value = match.value.replace(',', '.').toFloatOrNull() ?: continue
+        return value.toInt()
+    }
+    return null
+}
+
+private data class KcalMatches(
+    val preferred: Float?,
+    val all: List<Float>
+)
+
+private fun findKcalValues(lines: List<String>, text: String): KcalMatches {
+    val regex = Regex("""(?i)(\d+(?:[.,]\d+)?)\s*(kcal|ккал)""")
+    val all = regex.findAll(text).mapNotNull {
+        it.groupValues[1].replace(',', '.').toFloatOrNull()
+    }.toList()
+
+    val preferred = mutableListOf<Float>()
+    val lookaround = 2
+    for (index in lines.indices) {
+        val line = lines[index]
+        if (!line.contains("kcal") && !line.contains("ккал")) continue
+        var has100 = line.contains("100")
+        if (!has100) {
+            for (i in 1..lookaround) {
+                if (lines.getOrNull(index - i)?.contains("100") == true) {
+                    has100 = true
+                    break
+                }
+                if (lines.getOrNull(index + i)?.contains("100") == true) {
+                    has100 = true
+                    break
+                }
+            }
+        }
+        if (!has100) continue
+        preferred += regex.findAll(line).mapNotNull {
+            it.groupValues[1].replace(',', '.').toFloatOrNull()
+        }
+        if (preferred.isEmpty()) {
+            lines.getOrNull(index + 1)?.let { next ->
+                preferred += regex.findAll(next).mapNotNull {
+                    it.groupValues[1].replace(',', '.').toFloatOrNull()
+                }
+            }
+        }
+    }
+
+    val preferredValue = when {
+        preferred.isNotEmpty() -> preferred.minOrNull()
+        all.isNotEmpty() -> all.maxOrNull()
+        else -> null
+    }
+    return KcalMatches(preferred = preferredValue, all = all)
+}
+
+private fun parseSodium(lines: List<String>): Int? {
+    val mg = pickInt(collectValues(lines, sodiumKeywords, mgUnits))
+    if (mg != null) return mg
+    val sodiumG = pickFloat(collectValues(lines, sodiumKeywords, gramUnits))
+    if (sodiumG != null) return (sodiumG * 1000f).toInt()
+    val saltG = findValueNearKeyword(lines, saltKeywords, gramUnits)
+    if (saltG != null) return (saltG * 1000f).toInt()
+    return null
+}
+
+private fun findValueNearKeyword(
+    lines: List<String>,
+    keywords: List<String>,
+    units: List<String>,
+    lookaround: Int = 2
+): Float? {
+    for (index in lines.indices) {
+        val line = lines[index]
+        if (!keywords.any { line.contains(it) }) continue
+        val direct = extractNumbers(line, units)
+        if (direct.isNotEmpty()) return pickFloat(direct)
+        for (i in 1..lookaround) {
+            val next = lines.getOrNull(index + i) ?: break
+            val values = extractNumbers(next, units)
+            if (values.isNotEmpty()) return pickFloat(values)
+        }
+        for (i in 1..lookaround) {
+            val prevIndex = index - i
+            if (prevIndex < 0) break
+            val prev = lines[prevIndex]
+            val values = extractNumbers(prev, units)
+            if (values.isNotEmpty()) return pickFloat(values)
+        }
+    }
+    return null
+}
+
+private fun findBjuTriple(text: String): Triple<Float, Float, Float>? {
+    val regex = Regex("""(?i)(бжу|б/ж/у|bju|b/j/u)[^0-9]{0,10}(\d+(?:[.,]\d+)?)\s*/\s*(\d+(?:[.,]\d+)?)\s*/\s*(\d+(?:[.,]\d+)?)""")
+    val match = regex.find(text) ?: return null
+    val p = match.groupValues[2].replace(',', '.').toFloatOrNull() ?: return null
+    val f = match.groupValues[3].replace(',', '.').toFloatOrNull() ?: return null
+    val c = match.groupValues[4].replace(',', '.').toFloatOrNull() ?: return null
+    return Triple(p, f, c)
+}
+
+private fun findMacroSymbols(text: String): Triple<Float, Float, Float>? {
+    val p = findSymbolValue(text, listOf("б", "b"))
+    val f = findSymbolValue(text, listOf("ж"))
+    val c = findSymbolValue(text, listOf("у"))
+    return if (p != null  f != null  c != null) {
+        Triple(p ?: 0f, f ?: 0f, c ?: 0f)
+    } else {
+        null
+    }
+}
+
+private fun findSymbolValue(text: String, symbols: List<String>): Float? {
+    val pattern = symbols.joinToString("|") { Regex.escape(it) }
+    val regex = Regex("""(?i)(?:^|[\s·•])(?:$pattern)\s*[:=\\-]?\s*(\d+(?:[.,]\d+)?)""")
+    val match = regex.find(text) ?: return null
+    return match.groupValues[1].replace(',', '.').toFloatOrNull()
+}

@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: familly-budget
+    restart: always
+    ports:
+      - "8282:8080"
+    environment:
+      - MONGODB_URI=mongodb://mongo:27017/famillyBudget
+    depends_on:
+      - mongo
+    
+  mongo:
+    image: mongo:latest
+    container_name: familly-budget-mongo
+    restart: always
+    volumes:
+      - mongodb_data:/data/db
+    ports:
+      - "27017:27017"
+
+volumes:
+  mongodb_data:

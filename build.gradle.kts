@@ -11,7 +11,7 @@ group = "com.faigenbloom"
 version = "0.0.1"
 
 application {
-    mainClass = "io.ktor.server.netty.EngineMain"
+    mainClass.set("com.faigenbloom.ApplicationKt")
 }
 tasks.register<Jar>("fatJarCustom") {
     group = "build"
